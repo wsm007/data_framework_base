@@ -1,57 +1,44 @@
-name: DataOps Pipeline - Base
+name: DataOps Pipeline – Bronze
 
 on:
- workflow_dispatch:
- push:
-   branches: [ "main" ]
-   paths:
-     - "framework/ingestion/10_ingestion_dbx.py"
-     - "data/source/**"
-     - ".github/workflows/dataops-pipeline.yml"
+  workflow_dispatch: {}
+  push:
+    branches: ["main"]
+    paths:
+      - "data/**"
+      - "framework/ingestion/**"
+      - ".github/workflows/dataops-pipeline.yml"
 
 jobs:
- ingestion:
-   runs-on: ubuntu-latest
-   env:
-     ENV: dev
+  bronze-ingestion:
+    runs-on: ubuntu-latest
 
-   steps:
-     - name: Checkout repository
-       uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-     - name: Set up Python
-       uses: actions/setup-python@v5
-       with:
-         python-version: "3.11"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-     - name: Show repo structure (debug)
-       run: |
-        echo "📂 Root directory:"
-        ls -la
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install databricks-sql-connector
 
-     - name: Run Databricks-style ingestion notebook
-       run: |
-        python framework/ingestion/10_ingestion_dbx.py
-
-     - name: Upload ingestion evidence
-       uses: actions/upload-artifact@v4
-       with:
-         name: ingestion-evidence
-         path: |
-          data/landing/**
-          logs/**
-         if-no-files-found: warn
- transformation:
-   needs: ingestion
-   runs-on: ubuntu-latest
-   env:
-     ENV: dev
-
-   steps:
-     - name: Checkout repository
-       uses: actions/checkout@v4
-
-     - name: Set up Python
-       uses: actions/setup-python@v5
-       with:
-         python-version: "3.11"
+      - name: Ingest Bronze into Databricks SQL
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          CSV_PATH: data/source/customers.csv
+          TARGET_TABLE: demo.bronze_customers
+          SOURCE_NAME: github_actions
+        run: |
+          echo "PWD:"
+          pwd
+          echo "Listing repo root:"
+          ls -la
+          echo "Running bronze ingestion..."
+          python framework/ingestion/ingest_bronze.py
